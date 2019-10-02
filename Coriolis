@@ -1,0 +1,135 @@
+#!/usr/bin/env python
+'''
+'''
+
+from __future__ import division
+from __future__ import absolute_import
+import numpy as np
+import pandas as pd
+import scipy.optimize
+import scipy.stats
+import subprocess
+import argparse
+import itertools
+import time
+import os, re
+import joblib
+import sys, gzip, bz2
+import logging
+from argparse import Namespace
+
+import warnings
+warnings.filterwarnings("ignore")
+
+__version__ = '1.0.0'
+
+borderline = "<><><<>><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><>"
+
+header ="\n"
+header += borderline +"\n"
+header += "<>\n"
+header += "<> Coriolis \n"
+header += "<> Version: {}\n".format(str(__version__))
+header += "<> (C) 2019 Matthew Traylor\n"
+header += "<> Queen Mary University of London\n"
+header += "<> GNU General Public License v3\n"
+header += "<> Correspondence: m.traylor@qmul.ac.uk \n"
+header += "<> \n"
+header += borderline +"\n"
+
+print(header)
+pd.set_option('display.max_rows', 500)
+pd.set_option('display.width', 800)
+pd.set_option('precision', 12)
+pd.set_option('max_colwidth', 800)
+pd.set_option('colheader_justify', 'left')
+
+np.set_printoptions(linewidth=800)
+np.set_printoptions(precision=3)
+
+
+
+def coriolis(args):
+    start_t = time.time()
+    args = parser.parse_args()
+
+    GWAS_input_files = args.sumstats.split(',')
+    print('<> Reading in GWAS Summary Stats...')
+    P = len(GWAS_input_files)  # of phenotypes/traits
+    GWAS_d = dict()
+    n = 0 
+    for GWAS_input in GWAS_input_files:
+
+       GWAS_d[n] = pd.read_csv(GWAS_input, index_col=False, header=0, delim_whitespace=True, compression=None, na_values=['.','NA'])
+       n = n+1
+
+    print('<> Merging GWAS Summary Stats...')
+    for p in range(P):
+        if p == 0:
+            GWAS_all = GWAS_d[p]
+        else:
+            GWAS_all = GWAS_all.merge(GWAS_d[p], how='inner', on='SNP')
+
+    print('<> Calculating Random Effects Meta-analysis...')
+    GWAS_all['V_x'] = round(GWAS_all['SE_x']**(2),5)
+    GWAS_all['V_y'] = round(GWAS_all['SE_y']**(2),5)
+    GWAS_all['V_z'] = round(GWAS_all['SE']**(2),5)
+    GWAS_all['df'] = n-1
+
+    GWAS_all['SumW'] = round(1/GWAS_all['V_x']+1/GWAS_all['V_y']+1/GWAS_all['V_z'],5)
+    GWAS_all['SumWT2'] = round( ( (1/GWAS_all['V_x'])*GWAS_all['BETA_x']**2 + (1/GWAS_all['V_y'])*GWAS_all['BETA_y']**2 + (1/GWAS_all['V_z'])*GWAS_all['BETA']**2),5)
+    GWAS_all['SumSqWT'] = ((1/GWAS_all['V_x'])*GWAS_all['BETA_x'] + (1/GWAS_all['V_y'])*GWAS_all['BETA_y'] + (1/GWAS_all['V_z'])*GWAS_all['BETA'])**2
+
+    GWAS_all['Q'] = round(( GWAS_all['SumWT2'] - (GWAS_all['SumSqWT']) / GWAS_all['SumW']),5)
+    GWAS_all['T2'] = np.where(GWAS_all['Q']>n, round((GWAS_all['Q']-GWAS_all['df']) / ((1/GWAS_all['V_x']+1/GWAS_all['V_y']+1/GWAS_all['V_z']) - ((1/GWAS_all['V_x'])**2+(1/GWAS_all['V_y'])**2+(1/GWAS_all['V_z'])**2) / (1/GWAS_all['V_x']+1/GWAS_all['V_y']+1/GWAS_all['V_z'])),5),0)
+
+    GWAS_all['RE_BETA'] = round(( ((1/(GWAS_all['V_x']+GWAS_all['T2']))*GWAS_all['BETA_x']) + ((1/(GWAS_all['V_y']+GWAS_all['T2']))*GWAS_all['BETA_y']) + ((1/(GWAS_all['V_z']+GWAS_all['T2']))*(GWAS_all['BETA']))) / GWAS_all['SumW'],5)
+    GWAS_all['FE_BETA'] = round(( ((1/GWAS_all['V_x'])*GWAS_all['BETA_x']) + ((1/GWAS_all['V_y'])*GWAS_all['BETA_y']) + ((1/GWAS_all['V_z'])*(GWAS_all['BETA']))) / GWAS_all['SumW'] ,5)
+
+    GWAS_all['RE_SE'] = round((1 / (1/(GWAS_all['V_x']+GWAS_all['T2']) + 1/(GWAS_all['V_y']+GWAS_all['T2']) + 1/(GWAS_all['V_z']+GWAS_all['T2'])))**(1/2),5)
+    GWAS_all['FE_SE'] = round((1 / (1/(GWAS_all['V_x']) + 1/(GWAS_all['V_y']) + 1/(GWAS_all['V_z'])))**(1/2),5)
+
+    GWAS_all['RE_P'] = 2 * scipy.stats.norm.cdf(-np.abs(GWAS_all['RE_BETA']/GWAS_all['RE_SE']))
+    GWAS_all['FE_P'] = 2 * scipy.stats.norm.cdf(-np.abs(GWAS_all['FE_BETA']/GWAS_all['FE_SE']))
+
+    df = pd.DataFrame(GWAS_all)
+    export = df.to_csv(args.out,sep="\t",index=None)
+    print('<> GWAS meta-analysis complete...')
+    print('<> ')
+    print(borderline)
+    print('<> ')
+    print('<> Generating manhattan and QQ plots...')
+    subprocess.call(["Rscript", "/data/home/btx586/Coriolis/Coriolis_manhattan_qq.R", "--args", args.out])
+
+parser = argparse.ArgumentParser(description="\n **Coriolis: Target Identification from GWAS and LOF data of correlated phenotypes**\n")
+
+in_opts = parser.add_argument_group(title='Input Files', description="Input files to be used by Coriolis. The --sumstats option is required, while using the other two options take priority of their corresponding estimation routines, if used.")
+in_opts.add_argument("--sumstats", metavar="{File1},{File2}...", type=str, nargs='?',required=False, help='Specify the list of summary statistics files to perform multitrait analysis. Multiple files paths must be separated by \",\". Please read the documentation  to find the up-to-date set of acceptable file formats. A general guideline is that any files you pass into Coriolis should also be parsable by ldsc and you should take the additional step of specifying the names of the main columns below to avoid reading errors.')
+
+out_opts = parser.add_argument_group(title='Ouput Files', description="Input files to be used by Coriolis. The --sumstats option is required, while using the other two options take priority of their corresponding estimation routines, if used.")
+out_opts.add_argument("--out", metavar='DIR/PREFIX', default='./coriolis_results', type=str, help='Specify the directory and name prefix to output Coriolis results. All coriolis results will be prefixed with the corresponding tag. Default is ./coriolis_results')
+
+input_formatting = parser.add_argument_group(title="Column names of input files", description="These options manually pass the names of the relevant summary statistics columns used by Coriolis. It is recommended to pass these names because only narrow searches for these columns are performed in the default cases. Moreover, it is necessary that these input files be readable by ldsc's munge_sumstats command.")
+input_formatting.add_argument("--snp_name", default="snpid", action="store",type=str, help="Name of the single column that provides the unique identifier for SNPs in the GWAS summary statistics across all GWAS results. Default is \"snpid\". This the index that will be used to merge the GWAS summary statistics. Any SNP lists passed to ---include or --exclude should also contain the same name.")
+input_formatting.add_argument("--beta_name", default="beta", help="The common name of the column of beta coefficients (effect sizes) across all input files. Must be specified with se. If specified, it will override the z-score column.")
+input_formatting.add_argument("--se_name", default="se", help="The common name of the column of standard errors of the betas across all input files. Default is the lowercase letter z. Must be specified with --beta_name.")
+input_formatting.add_argument("--n_name", default="n", help="the common name of the column of sample sizes in the GWAS summary statistics files. Default is the lowercase letter  n.")
+input_formatting.add_argument("--n_value", default=None, metavar="N1, N2,...", type=str, help="Comma separated sample size values for each GWAS summary statistics files. This option is useful for GWAS input that does not include an N column, e.g. BOLT-LMM.")
+input_formatting.add_argument('--eaf_name',default="freq", help="The common name of the column of minor allele frequencies (MAF) in the GWAS input files. The default is \"freq\".")
+input_formatting.add_argument('--a1_name',default='a1', type=str, help="Name of the column containing the effect allele of each SNP in the GWAS input. Default is \"a1\".")
+input_formatting.add_argument('--a2_name',default='a2', type=str, help="Name of the column containing the non-effect allele of each SNP in the GWAS input. Default is \"a2\".")
+input_formatting.add_argument('--p_name',default='p', type=str, help="Name of the column containing the p-value of the effect size in the GWAS input. Default is \"p\".")
+
+
+if __name__ == '__main__':
+    start_t = time.time()
+    args = parser.parse_args()
+
+    try:
+        coriolis(args)
+        print("\n")
+    except Exception as e:
+        logging.error(e,exc_info=True)
+        logging.info('Analysis terminated from error at {T}'.format(T=time.ctime()))
+        time_elapsed = round(time.time() - start_t, 2)
+        logging.info('Total time elapsed: {T}'.format(T=sec_to_str(time_elapsed)))
