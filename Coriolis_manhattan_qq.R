@@ -23,7 +23,7 @@ write.table(merge1,paste(datafile,".chr.bp",sep=""),row.names=F,col.names=T,quot
 ####
 ####	MANHATTAN PLOT
 
-tiff(paste(args[4],".tiff",sep=""),2*2**10,2**10,res=300,compression="lzw",pointsize=7)
+png(paste(args[4],".png",sep=""),2*2**10,2**10,res=300,pointsize=7)
 a<-NULL
 labpos<-NULL
 pos<-NULL
@@ -72,7 +72,7 @@ dev.off()
 ## obs <- readfile; p-values only
 ## read in your p-values,
 ## here I generated some
-tiff(paste(datafile,"_QQ.tiff",sep=""),2**10,2**10,res=200,compression="lzw",pointsize=7)
+png(paste(datafile,"_QQ.png",sep=""),2**10,2**10,res=200,pointsize=7)
 obs <- -log10(data$FE_P)
 N <- length(obs) ## number of p-values
 
@@ -112,8 +112,3 @@ qqplot(null,obs, xlab="Expected -log10(p)",ylab="Observed -log10(p)",ylim=c(0,MA
 dev.off()
 
 
-####
-####	ALLELE FRQ. SE PLOT
-tiff(paste(datafile,"_AF_SE.tiff",sep=""),2**10,2**10,res=200,compression="lzw",pointsize=7)
-plot(density(data$Freq_SE),xlab="Ref. Allele Freq. Std. Err.",main="")
-dev.off()

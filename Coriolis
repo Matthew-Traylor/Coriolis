@@ -28,7 +28,7 @@ borderline = "<><><<>><><><><><><><><><><><><><><><><><><><><><><><><><><><><><>
 header ="\n"
 header += borderline +"\n"
 header += "<>\n"
-header += "<> Coriolis \n"
+header += "<> Coriolis - Drug Target Enrichment for Correlated Traits from Genetic Data \n"
 header += "<> Version: {}\n".format(str(__version__))
 header += "<> (C) 2019 Matthew Traylor\n"
 header += "<> Queen Mary University of London\n"
@@ -99,7 +99,9 @@ def coriolis(args):
     print(borderline)
     print('<> ')
     print('<> Generating manhattan and QQ plots...')
-    subprocess.call(["Rscript", "/data/home/btx586/Coriolis/Coriolis_manhattan_qq.R", "--args", args.out])
+    #subprocess.call(["Rscript", "/data/home/btx586/Coriolis/Coriolis_manhattan_qq.R", "--args", args.out])
+    subprocess.call("R --vanilla --args results < /data/home/btx586/Coriolis/Coriolis_manhattan_qq.R > output", shell=True)
+
 
 parser = argparse.ArgumentParser(description="\n **Coriolis: Target Identification from GWAS and LOF data of correlated phenotypes**\n")
 
