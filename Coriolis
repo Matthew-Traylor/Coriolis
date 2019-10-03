@@ -99,10 +99,47 @@ def coriolis(args):
     print(borderline)
     print('<> ')
     print('<> Generating manhattan and QQ plots...')
-    #subprocess.call(["Rscript", "/data/home/btx586/Coriolis/Coriolis_manhattan_qq.R", "--args", args.out])
+    
+    # Should replace these subprocess calls with Python code
     subprocess.call("R --vanilla --args results < /data/home/btx586/Coriolis/Coriolis_manhattan_qq.R > output", shell=True)
+    print('<> Generating local plots...')
+    COMMAND='''awk '{if(NR==1)print "SNP","P";else if($33<'f')print $1,$33}' f=5e-6 results.chr.bp > results.sig_regions'''
+    subprocess.call(COMMAND,shell=True)
+    subprocess.call("plink --silent --bed /data/home/btx586/Coriolis/CEU.intergrated_phase1_v3.20110521_ACGT.bed --bim  /data/home/btx586/Coriolis/CEU.intergrated_phase1_v3.20110521_ACGT.bim --fam  /data/home/btx586/Coriolis/CEU.intergrated_phase1_v3.20110521_ACGT.fam --clump results.sig_regions --clump-r2 0.1 --clump-kb 1000 --out results.sig_regions", shell=True)
+    COMMAND='''sed '/^$/d' results.sig_regions.clumped > tmp && mv tmp results.sig_regions.clumped'''
+    subprocess.call(COMMAND,shell=True)
+
+    file = 'results.sig_regions.clumped'
+    with open(file) as fp:
+        next(fp)
+        line = fp.readline()
+        cnt = 1
+        while line:
+            SNP = line.split()[2]
+            CHR = line.split()[0]
+            BP = int(line.split()[3])
+
+            BP_min = BP - 250000
+            BP_max = BP + 250000
+
+            out = 'results.sig_region%02d' %cnt
+            ld_out = out + '.ld'
+            line = fp.readline()
+            cnt += 1
+            
+            BP_min=str(BP_min)
+            BP_max=str(BP_max)
+
+            subprocess.call(['plink', '--silent', '--bed', '/data/home/btx586/Coriolis/CEU.intergrated_phase1_v3.20110521_ACGT.bed', '--bim', '/data/home/btx586/Coriolis/CEU.intergrated_phase1_v3.20110521_ACGT.bim', '--fam', '/data/home/btx586/Coriolis/CEU.intergrated_phase1_v3.20110521_ACGT.fam', '--ld-snp', SNP, '--r2', '--ld-window-kb', '250', '--ld-window-r2', '0', '--ld-window', '99999', '--out', out]) 
+            COMMAND="awk '{if($2='f' && $3>'g' && $3<'h')print}' f=" + CHR + " g=" + BP_min + " h=" + BP_max + " results.chr.bp > " + out
+            subprocess.call(COMMAND,shell=True) 
+            COMMAND = "R --vanilla --args " + out + " " + CHR + " " + ld_out + " < /data/home/btx586/Coriolis/Coriolis_regional_plot.R > output"
+            subprocess.call(COMMAND, shell=True)
 
 
+######	
+######	Argument Parsing
+######
 parser = argparse.ArgumentParser(description="\n **Coriolis: Target Identification from GWAS and LOF data of correlated phenotypes**\n")
 
 in_opts = parser.add_argument_group(title='Input Files', description="Input files to be used by Coriolis. The --sumstats option is required, while using the other two options take priority of their corresponding estimation routines, if used.")
@@ -123,6 +160,9 @@ input_formatting.add_argument('--a2_name',default='a2', type=str, help="Name of 
 input_formatting.add_argument('--p_name',default='p', type=str, help="Name of the column containing the p-value of the effect size in the GWAS input. Default is \"p\".")
 
 
+######
+######  Main Programme
+######
 if __name__ == '__main__':
     start_t = time.time()
     args = parser.parse_args()
@@ -134,4 +174,3 @@ if __name__ == '__main__':
         logging.error(e,exc_info=True)
         logging.info('Analysis terminated from error at {T}'.format(T=time.ctime()))
         time_elapsed = round(time.time() - start_t, 2)
-        logging.info('Total time elapsed: {T}'.format(T=sec_to_str(time_elapsed)))

@@ -10,7 +10,7 @@ mapfile<-"/data/home/btx586/Coriolis/chr.bp.rsid"
 
 data<-read.table(datafile,header=T)
 
-map<-read.table(mapfile,header=F,nrows=9917286)
+map<-read.table(mapfile,header=T,nrows=9917286,strings=F,colClasses=c("character","numeric","numeric"))
 names(map)<-c("SNP","CHR","BP")
 merge1<-merge(map,data,by="SNP")
 merge1<-merge1[order(merge1$FE_P),]
@@ -37,7 +37,7 @@ cum_b<-NULL
 for(i in 1:22){cum_a[i]<-sum(a[1:i])}
 for(i in 1:22){if(i>1){cum_b[i]<-cum_a[i-1]}else cum_b[i]<-0}
 data$CHR.MAX<-cum_b[data$CHR]
-data$plot.pos<-data$CHR.MAX+as.numeric(data$BP)
+data$plot.pos<-data$CHR.MAX+data$BP
 plot.max<-max(-log10(5e-9),max(-log10(data$FE_P))+0.25)
 
 #set colours
