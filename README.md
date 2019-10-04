@@ -1,3 +1,4 @@
 # Coriolis
-[Under Development]\n
+[Under Development]
+
 Coriolis - Drug Target Enrichment for Correlated Traits from Genetic Data
