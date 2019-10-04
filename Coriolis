@@ -53,88 +53,116 @@ def coriolis(args):
     start_t = time.time()
     args = parser.parse_args()
 
-    GWAS_input_files = args.sumstats.split(',')
-    print('<> Reading in GWAS Summary Stats...')
-    P = len(GWAS_input_files)  # of phenotypes/traits
-    GWAS_d = dict()
-    n = 0 
-    for GWAS_input in GWAS_input_files:
+    if args.meta or args.all:
+        GWAS_input_files = args.sumstats.split(',')
+        print('<> Reading in GWAS Summary Stats...')
+        P = len(GWAS_input_files)  # of phenotypes/traits
+        GWAS_d = dict()
+        n = 0 
+        for GWAS_input in GWAS_input_files:
 
-       GWAS_d[n] = pd.read_csv(GWAS_input, index_col=False, header=0, delim_whitespace=True, compression=None, na_values=['.','NA'])
-       n = n+1
+           GWAS_d[n] = pd.read_csv(GWAS_input, index_col=False, header=0, delim_whitespace=True, compression=None, na_values=['.','NA'])
+           n = n+1
 
-    print('<> Merging GWAS Summary Stats...')
-    for p in range(P):
-        if p == 0:
-            GWAS_all = GWAS_d[p]
-        else:
-            GWAS_all = GWAS_all.merge(GWAS_d[p], how='inner', on='SNP')
+        print('<> Merging GWAS Summary Stats...')
+        for p in range(P):
+            if p == 0:
+                 GWAS_all = GWAS_d[p]
+            else:
+                GWAS_all = GWAS_all.merge(GWAS_d[p], how='inner', on='SNP')
 
-    print('<> Calculating Random Effects Meta-analysis...')
-    GWAS_all['V_x'] = round(GWAS_all['SE_x']**(2),5)
-    GWAS_all['V_y'] = round(GWAS_all['SE_y']**(2),5)
-    GWAS_all['V_z'] = round(GWAS_all['SE']**(2),5)
-    GWAS_all['df'] = n-1
+        print('<> Calculating Random Effects Meta-analysis...')
+        GWAS_all['V_x'] = round(GWAS_all['SE_x']**(2),5)
+        GWAS_all['V_y'] = round(GWAS_all['SE_y']**(2),5)
+        GWAS_all['V_z'] = round(GWAS_all['SE']**(2),5)
+        GWAS_all['df'] = n-1
 
-    GWAS_all['SumW'] = round(1/GWAS_all['V_x']+1/GWAS_all['V_y']+1/GWAS_all['V_z'],5)
-    GWAS_all['SumWT2'] = round( ( (1/GWAS_all['V_x'])*GWAS_all['BETA_x']**2 + (1/GWAS_all['V_y'])*GWAS_all['BETA_y']**2 + (1/GWAS_all['V_z'])*GWAS_all['BETA']**2),5)
-    GWAS_all['SumSqWT'] = ((1/GWAS_all['V_x'])*GWAS_all['BETA_x'] + (1/GWAS_all['V_y'])*GWAS_all['BETA_y'] + (1/GWAS_all['V_z'])*GWAS_all['BETA'])**2
+        GWAS_all['SumW'] = round(1/GWAS_all['V_x']+1/GWAS_all['V_y']+1/GWAS_all['V_z'],5)
+        GWAS_all['SumWT2'] = round( ( (1/GWAS_all['V_x'])*GWAS_all['BETA_x']**2 + (1/GWAS_all['V_y'])*GWAS_all['BETA_y']**2 + (1/GWAS_all['V_z'])*GWAS_all['BETA']**2),5)
+        GWAS_all['SumSqWT'] = ((1/GWAS_all['V_x'])*GWAS_all['BETA_x'] + (1/GWAS_all['V_y'])*GWAS_all['BETA_y'] + (1/GWAS_all['V_z'])*GWAS_all['BETA'])**2
 
-    GWAS_all['Q'] = round(( GWAS_all['SumWT2'] - (GWAS_all['SumSqWT']) / GWAS_all['SumW']),5)
-    GWAS_all['T2'] = np.where(GWAS_all['Q']>n, round((GWAS_all['Q']-GWAS_all['df']) / ((1/GWAS_all['V_x']+1/GWAS_all['V_y']+1/GWAS_all['V_z']) - ((1/GWAS_all['V_x'])**2+(1/GWAS_all['V_y'])**2+(1/GWAS_all['V_z'])**2) / (1/GWAS_all['V_x']+1/GWAS_all['V_y']+1/GWAS_all['V_z'])),5),0)
+        GWAS_all['Q'] = round(( GWAS_all['SumWT2'] - (GWAS_all['SumSqWT']) / GWAS_all['SumW']),5)
+        GWAS_all['T2'] = np.where(GWAS_all['Q']>n, round((GWAS_all['Q']-GWAS_all['df']) / ((1/GWAS_all['V_x']+1/GWAS_all['V_y']+1/GWAS_all['V_z']) - ((1/GWAS_all['V_x'])**2+(1/GWAS_all['V_y'])**2+(1/GWAS_all['V_z'])**2) / (1/GWAS_all['V_x']+1/GWAS_all['V_y']+1/GWAS_all['V_z'])),5),0)
 
-    GWAS_all['RE_BETA'] = round(( ((1/(GWAS_all['V_x']+GWAS_all['T2']))*GWAS_all['BETA_x']) + ((1/(GWAS_all['V_y']+GWAS_all['T2']))*GWAS_all['BETA_y']) + ((1/(GWAS_all['V_z']+GWAS_all['T2']))*(GWAS_all['BETA']))) / GWAS_all['SumW'],5)
-    GWAS_all['FE_BETA'] = round(( ((1/GWAS_all['V_x'])*GWAS_all['BETA_x']) + ((1/GWAS_all['V_y'])*GWAS_all['BETA_y']) + ((1/GWAS_all['V_z'])*(GWAS_all['BETA']))) / GWAS_all['SumW'] ,5)
+        GWAS_all['RE_BETA'] = round(( ((1/(GWAS_all['V_x']+GWAS_all['T2']))*GWAS_all['BETA_x']) + ((1/(GWAS_all['V_y']+GWAS_all['T2']))*GWAS_all['BETA_y']) + ((1/(GWAS_all['V_z']+GWAS_all['T2']))*(GWAS_all['BETA']))) / GWAS_all['SumW'],5)
+        GWAS_all['FE_BETA'] = round(( ((1/GWAS_all['V_x'])*GWAS_all['BETA_x']) + ((1/GWAS_all['V_y'])*GWAS_all['BETA_y']) + ((1/GWAS_all['V_z'])*(GWAS_all['BETA']))) / GWAS_all['SumW'] ,5)
 
-    GWAS_all['RE_SE'] = round((1 / (1/(GWAS_all['V_x']+GWAS_all['T2']) + 1/(GWAS_all['V_y']+GWAS_all['T2']) + 1/(GWAS_all['V_z']+GWAS_all['T2'])))**(1/2),5)
-    GWAS_all['FE_SE'] = round((1 / (1/(GWAS_all['V_x']) + 1/(GWAS_all['V_y']) + 1/(GWAS_all['V_z'])))**(1/2),5)
+        GWAS_all['RE_SE'] = round((1 / (1/(GWAS_all['V_x']+GWAS_all['T2']) + 1/(GWAS_all['V_y']+GWAS_all['T2']) + 1/(GWAS_all['V_z']+GWAS_all['T2'])))**(1/2),5)
+        GWAS_all['FE_SE'] = round((1 / (1/(GWAS_all['V_x']) + 1/(GWAS_all['V_y']) + 1/(GWAS_all['V_z'])))**(1/2),5)
 
-    GWAS_all['RE_P'] = 2 * scipy.stats.norm.cdf(-np.abs(GWAS_all['RE_BETA']/GWAS_all['RE_SE']))
-    GWAS_all['FE_P'] = 2 * scipy.stats.norm.cdf(-np.abs(GWAS_all['FE_BETA']/GWAS_all['FE_SE']))
-
-    df = pd.DataFrame(GWAS_all)
-    export = df.to_csv(args.out,sep="\t",index=None)
-    print('<> GWAS meta-analysis complete...')
-    print('<> ')
-    print(borderline)
-    print('<> ')
-    print('<> Generating manhattan and QQ plots...')
+        GWAS_all['Z'] = GWAS_all['FE_BETA']/GWAS_all['FE_SE'] 
     
-    # Should replace these subprocess calls with Python code
-    subprocess.call("R --vanilla --args results < /data/home/btx586/Coriolis/Coriolis_manhattan_qq.R > output", shell=True)
-    print('<> Generating local plots...')
-    COMMAND='''awk '{if(NR==1)print "SNP","P";else if($33<'f')print $1,$33}' f=5e-6 results.chr.bp > results.sig_regions'''
-    subprocess.call(COMMAND,shell=True)
-    subprocess.call("plink --silent --bed /data/home/btx586/Coriolis/CEU.intergrated_phase1_v3.20110521_ACGT.bed --bim  /data/home/btx586/Coriolis/CEU.intergrated_phase1_v3.20110521_ACGT.bim --fam  /data/home/btx586/Coriolis/CEU.intergrated_phase1_v3.20110521_ACGT.fam --clump results.sig_regions --clump-r2 0.1 --clump-kb 1000 --out results.sig_regions", shell=True)
-    COMMAND='''sed '/^$/d' results.sig_regions.clumped > tmp && mv tmp results.sig_regions.clumped'''
-    subprocess.call(COMMAND,shell=True)
+        GWAS_all['RE_P'] = 2 * scipy.stats.norm.cdf(-np.abs(GWAS_all['RE_BETA']/GWAS_all['RE_SE']))
+        GWAS_all['FE_P'] = 2 * scipy.stats.norm.cdf(-np.abs(GWAS_all['FE_BETA']/GWAS_all['FE_SE']))
 
-    file = 'results.sig_regions.clumped'
-    with open(file) as fp:
-        next(fp)
-        line = fp.readline()
-        cnt = 1
-        while line:
-            SNP = line.split()[2]
-            CHR = line.split()[0]
-            BP = int(line.split()[3])
+        df = pd.DataFrame(GWAS_all)
+        export = df.to_csv(args.out,sep="\t",index=None)
+        print('<> GWAS meta-analysis complete...')
+        print('<> ')
+        print(borderline)
+        print('<> ')
+    
+    if args.gwas_plots or args.all:
+        print('<> Generating manhattan and QQ plots...')
+    
+        # Should replace these subprocess calls with Python code
+        subprocess.call("R --vanilla --args results < /data/home/btx586/Coriolis/Coriolis_manhattan_qq.R > output", shell=True)
+        print('<> Generating local plots...')
+        COMMAND='''awk '{if(NR==1)print "SNP","P";else if($33<'f')print $1,$33}' f=5e-6 results.chr.bp > results.sig_regions'''
+        subprocess.call(COMMAND,shell=True)
+        subprocess.call("plink --silent --bed /data/home/btx586/Coriolis/CEU.intergrated_phase1_v3.20110521_ACGT.bed --bim  /data/home/btx586/Coriolis/CEU.intergrated_phase1_v3.20110521_ACGT.bim --fam  /data/home/btx586/Coriolis/CEU.intergrated_phase1_v3.20110521_ACGT.fam --clump results.sig_regions --clump-r2 0.1 --clump-kb 1000 --out results.sig_regions", shell=True)
+        COMMAND='''sed '/^$/d' results.sig_regions.clumped > tmp && mv tmp results.sig_regions.clumped'''
+        subprocess.call(COMMAND,shell=True)
 
-            BP_min = BP - 250000
-            BP_max = BP + 250000
-
-            out = 'results.sig_region%02d' %cnt
-            ld_out = out + '.ld'
+        file = 'results.sig_regions.clumped'
+        with open(file) as fp:
+            next(fp)
             line = fp.readline()
-            cnt += 1
-            
-            BP_min=str(BP_min)
-            BP_max=str(BP_max)
+            cnt = 1
+            while line:
+                SNP = line.split()[2]
+                CHR = line.split()[0]
+                BP = int(line.split()[3])
 
-            subprocess.call(['plink', '--silent', '--bed', '/data/home/btx586/Coriolis/CEU.intergrated_phase1_v3.20110521_ACGT.bed', '--bim', '/data/home/btx586/Coriolis/CEU.intergrated_phase1_v3.20110521_ACGT.bim', '--fam', '/data/home/btx586/Coriolis/CEU.intergrated_phase1_v3.20110521_ACGT.fam', '--ld-snp', SNP, '--r2', '--ld-window-kb', '250', '--ld-window-r2', '0', '--ld-window', '99999', '--out', out]) 
-            COMMAND="awk '{if($2='f' && $3>'g' && $3<'h')print}' f=" + CHR + " g=" + BP_min + " h=" + BP_max + " results.chr.bp > " + out
-            subprocess.call(COMMAND,shell=True) 
-            COMMAND = "R --vanilla --args " + out + " " + CHR + " " + ld_out + " < /data/home/btx586/Coriolis/Coriolis_regional_plot.R > output"
-            subprocess.call(COMMAND, shell=True)
+                BP_min = BP - 250000
+                BP_max = BP + 250000
+
+                out = 'results.sig_region%02d' %cnt
+                ld_out = out + '.ld'
+                line = fp.readline()
+                cnt += 1
+            
+                BP_min=str(BP_min)
+                BP_max=str(BP_max)
+
+                subprocess.call(['plink', '--silent', '--bed', '/data/home/btx586/Coriolis/CEU.intergrated_phase1_v3.20110521_ACGT.bed', '--bim', '/data/home/btx586/Coriolis/CEU.intergrated_phase1_v3.20110521_ACGT.bim', '--fam', '/data/home/btx586/Coriolis/CEU.intergrated_phase1_v3.20110521_ACGT.fam', '--ld-snp', SNP, '--r2', '--ld-window-kb', '250', '--ld-window-r2', '0', '--ld-window', '99999', '--out', out]) 
+                COMMAND="awk '{if($2='f' && $3>'g' && $3<'h')print}' f=" + CHR + " g=" + BP_min + " h=" + BP_max + " results.chr.bp > " + out
+                subprocess.call(COMMAND,shell=True) 
+                COMMAND = "R --vanilla --args " + out + " " + CHR + " " + ld_out + " < /data/home/btx586/Coriolis/Coriolis_regional_plot.R > output"
+                subprocess.call(COMMAND, shell=True)
+        print("<>")
+        print(borderline)
+    
+
+    if args.twas or args.all:
+        print("<>")
+        print("<> Running TWAS analysis using Fusion...")
+        for chr in range(22):
+            chr = str(chr+1)
+            COMMAND = "Rscript fusion_twas-master/FUSION.assoc_test.R --sumstats results --weights ./fusion_twas-master/WEIGHTS/Whole_Blood.P01.pos --weights_dir ./fusion_twas-master/WEIGHTS/ --ref_ld_chr ./fusion_twas-master/LDREF/1000G.EUR. --chr " + chr + " --out results.WB.GTEx" + chr + ".dat"
+            subprocess.call(COMMAND,shell=True)
+            COMMAND = "Rscript fusion_twas-master/FUSION.assoc_test.R --sumstats results --weights ./fusion_twas-master/WEIGHTS/Artery_Aorta.P01.pos --weights_dir ./fusion_twas-master/WEIGHTS/ --ref_ld_chr ./fusion_twas-master/LDREF/1000G.EUR. --chr " + chr + " --out results.AA.GTEx" + chr + ".dat"
+            subprocess.call(COMMAND,shell=True)
+            COMMAND = "Rscript fusion_twas-master/FUSION.assoc_test.R --sumstats results --weights ./fusion_twas-master/WEIGHTS/Artery_Coronary.P01.pos --weights_dir ./fusion_twas-master/WEIGHTS/ --ref_ld_chr ./fusion_twas-master/LDREF/1000G.EUR. --chr " + chr + " --out results.AC.GTEx" + chr + ".dat"
+            subprocess.call(COMMAND,shell=True)
+            COMMAND = "Rscript fusion_twas-master/FUSION.assoc_test.R --sumstats results --weights ./fusion_twas-master/WEIGHTS/Artery_Tibial.P01.pos --weights_dir ./fusion_twas-master/WEIGHTS/ --ref_ld_chr ./fusion_twas-master/LDREF/1000G.EUR. --chr " + chr + " --out results.AT.GTEx" + chr + ".dat"
+            subprocess.call(COMMAND,shell=True)
+            COMMAND = "Rscript fusion_twas-master/FUSION.assoc_test.R --sumstats results --weights ./fusion_twas-master/WEIGHTS/NTR.BLOOD.RNAARR.pos --weights_dir ./fusion_twas-master/WEIGHTS/ --ref_ld_chr ./fusion_twas-master/LDREF/1000G.EUR. --chr " + chr + " --out results.PB" + chr + ".dat"
+            subprocess.call(COMMAND,shell=True)
+            COMMAND = "Rscript fusion_twas-master/FUSION.assoc_test.R --sumstats results --weights ./fusion_twas-master/WEIGHTS/YFS.BLOOD.RNAARR.pos --weights_dir ./fusion_twas-master/WEIGHTS/ --ref_ld_chr ./fusion_twas-master/LDREF/1000G.EUR. --chr " + chr + " --out results.WB.YFS" + chr + ".dat"
+            subprocess.call(COMMAND,shell=True)
+
+
 
 
 ######	
@@ -144,20 +172,15 @@ parser = argparse.ArgumentParser(description="\n **Coriolis: Target Identificati
 
 in_opts = parser.add_argument_group(title='Input Files', description="Input files to be used by Coriolis. The --sumstats option is required, while using the other two options take priority of their corresponding estimation routines, if used.")
 in_opts.add_argument("--sumstats", metavar="{File1},{File2}...", type=str, nargs='?',required=False, help='Specify the list of summary statistics files to perform multitrait analysis. Multiple files paths must be separated by \",\". Please read the documentation  to find the up-to-date set of acceptable file formats. A general guideline is that any files you pass into Coriolis should also be parsable by ldsc and you should take the additional step of specifying the names of the main columns below to avoid reading errors.')
+in_opts.add_argument("--skip_plots", required=False, help='Skip generation of GWAS plots')
+in_opts.add_argument("--twas", required=False, action='store_true', help='Do twas')
+in_opts.add_argument("--meta", required=False, action='store_true', help='Do meta-analysis')
+in_opts.add_argument("--gwas-plots", required=False, action='store_true', help='Do gwas plots')
+in_opts.add_argument("--all", required=False, action='store_true', help='Do all analysis')
 
-out_opts = parser.add_argument_group(title='Ouput Files', description="Input files to be used by Coriolis. The --sumstats option is required, while using the other two options take priority of their corresponding estimation routines, if used.")
+out_opts = parser.add_argument_group(title='Output Files', description="Input files to be used by Coriolis. The --sumstats option is required, while using the other two options take priority of their corresponding estimation routines, if used.")
 out_opts.add_argument("--out", metavar='DIR/PREFIX', default='./coriolis_results', type=str, help='Specify the directory and name prefix to output Coriolis results. All coriolis results will be prefixed with the corresponding tag. Default is ./coriolis_results')
 
-input_formatting = parser.add_argument_group(title="Column names of input files", description="These options manually pass the names of the relevant summary statistics columns used by Coriolis. It is recommended to pass these names because only narrow searches for these columns are performed in the default cases. Moreover, it is necessary that these input files be readable by ldsc's munge_sumstats command.")
-input_formatting.add_argument("--snp_name", default="snpid", action="store",type=str, help="Name of the single column that provides the unique identifier for SNPs in the GWAS summary statistics across all GWAS results. Default is \"snpid\". This the index that will be used to merge the GWAS summary statistics. Any SNP lists passed to ---include or --exclude should also contain the same name.")
-input_formatting.add_argument("--beta_name", default="beta", help="The common name of the column of beta coefficients (effect sizes) across all input files. Must be specified with se. If specified, it will override the z-score column.")
-input_formatting.add_argument("--se_name", default="se", help="The common name of the column of standard errors of the betas across all input files. Default is the lowercase letter z. Must be specified with --beta_name.")
-input_formatting.add_argument("--n_name", default="n", help="the common name of the column of sample sizes in the GWAS summary statistics files. Default is the lowercase letter  n.")
-input_formatting.add_argument("--n_value", default=None, metavar="N1, N2,...", type=str, help="Comma separated sample size values for each GWAS summary statistics files. This option is useful for GWAS input that does not include an N column, e.g. BOLT-LMM.")
-input_formatting.add_argument('--eaf_name',default="freq", help="The common name of the column of minor allele frequencies (MAF) in the GWAS input files. The default is \"freq\".")
-input_formatting.add_argument('--a1_name',default='a1', type=str, help="Name of the column containing the effect allele of each SNP in the GWAS input. Default is \"a1\".")
-input_formatting.add_argument('--a2_name',default='a2', type=str, help="Name of the column containing the non-effect allele of each SNP in the GWAS input. Default is \"a2\".")
-input_formatting.add_argument('--p_name',default='p', type=str, help="Name of the column containing the p-value of the effect size in the GWAS input. Default is \"p\".")
 
 
 ######
@@ -169,7 +192,8 @@ if __name__ == '__main__':
 
     try:
         coriolis(args)
-        print("\n")
+        print("<>")
+        print("")
     except Exception as e:
         logging.error(e,exc_info=True)
         logging.info('Analysis terminated from error at {T}'.format(T=time.ctime()))
